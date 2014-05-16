@@ -85,9 +85,23 @@ def deploy():
         run("git pull")
         run("touch app.wsgi")
 
-
-
 def deploy_proj(loc):
-    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude='.git')
+    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude='.git,bin')
+    stop()
+    build()
+    start()
+
+def init():
+    run("circusd --daemon circus.ini")
+
+def start():
+    run("circusctl start mojing")
+
+def stop():
+    run("circusctl stop mojing")
+
+def build():
+    run("go build -o bin/mojing server.go")
+
 
 

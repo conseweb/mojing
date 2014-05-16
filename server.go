@@ -4,8 +4,8 @@ import (
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/render"
 	// "html/template"
-	"log"
-	"net/http"
+	// "log"
+	// "net/http"
 )
 
 func main() {
@@ -28,6 +28,6 @@ func main() {
 		r.JSON(200, map[string]interface{}{"hello": "world"})
 	})
 
-	// m.Run()
-	log.Fatal(http.ListenAndServe(":3000", m))
+	m.Run()
+	// log.Fatal(http.ListenAndServe(":3000", m))
 }

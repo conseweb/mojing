@@ -4,6 +4,7 @@
 from __future__ import with_statement
 from fabric.api import *
 from fabric.contrib.console import confirm
+from fabric.context_managers import *
 # from fabric.api import env, run
 import string
 from random import choice
@@ -21,6 +22,7 @@ env.roledefs = {
     'test': ['115.28.171.71']
 }
 
+remote_home = '/home/ubuntu'
 remote_working_dir = '/home/ubuntu/workspace/mojing'
 
 def host_type():
@@ -86,22 +88,28 @@ def deploy():
         run("touch app.wsgi")
 
 def deploy_proj(loc):
-    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude='.git,bin')
+    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude=['.git','bin','data'])
     stop()
     build()
     start()
 
-def init():
-    run("circusd --daemon circus.ini")
+def start_circusd():
+    with cd(remote_working_dir):
+        run("/usr/local/bin/circusd --daemon circus.ini")
+
+def quit_circusd():
+    run("/usr/local/bin/circusctl quit")
 
 def start():
-    run("circusctl start mojing")
+    run("/usr/local/bin/circusctl start mojing")
 
 def stop():
-    run("circusctl stop mojing")
+    run("/usr/local/bin/circusctl stop mojing")
 
 def build():
-    run("go build -o bin/mojing server.go")
+    with shell_env(GOROOT="/home/ubuntu/go", GOPATH="/home/ubuntu/.go"):
+        with cd(remote_working_dir):
+            run('/home/ubuntu/go/bin/go build -o bin/mojing server.go', shell=False)
 
 
 

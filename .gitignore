@@ -2,4 +2,6 @@ tmp/*
 *.pyc
 .DS_Store
 data/*
+.sconsign.dblite
+.hg/*
 

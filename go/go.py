@@ -91,10 +91,11 @@ def _get_platform_info(env, goos, goarch):
 
 def _get_host_platform(env):
     newenv = env.Clone()
-    newenv['ENV'].pop('GOOS', None)
-    newenv['ENV'].pop('GOARCH', None)
+    newenv['ENV'].pop('GOOS', 'linux')
+    newenv['ENV'].pop('GOARCH', 'amd64')
     config = _parse_config(_run_goenv(newenv))
-    return config['GOOS'], config['GOARCH']
+    # return config['GOOS'], config['GOARCH']
+    return 'linux', 'amd64'
 
 # COMPILER
 

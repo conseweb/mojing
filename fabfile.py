@@ -88,7 +88,7 @@ def deploy():
         run("touch app.wsgi")
 
 def deploy_proj(loc):
-    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude=['.git','bin','data'])
+    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude=['.git','bin','data','logs'])
     stop()
     build()
     start()
@@ -109,7 +109,7 @@ def stop():
 def build():
     with shell_env(GOROOT="/home/ubuntu/go", GOPATH="/home/ubuntu/.go"):
         with cd(remote_working_dir):
-            run('/home/ubuntu/go/bin/go build -o bin/mojing server.go', shell=False)
+            run('/home/ubuntu/go/bin/go build -o bin/mojing src/main.go', shell=False)
 
 
 

@@ -4,4 +4,6 @@ tmp/*
 data/*
 .sconsign.dblite
 .hg/*
-
+bin/*
+mojing.sublime-project
+mojing.sublime-workspace

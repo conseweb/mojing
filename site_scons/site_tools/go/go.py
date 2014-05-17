@@ -82,11 +82,11 @@ def _get_platform_info(env, goos, goarch):
         raise ValueError("Unrecognized platform: %s, %s" % (goos, goarch))
     info['archname'] = _archs[goarch]
     info['pkgroot'] = os.path.join(env['ENV']['GOROOT'], 'pkg', goos + '_' + goarch)
-    info['gc'] = os.path.join(env['ENV']['GOBIN'], info['archname'] + 'g')
-    info['ld'] = os.path.join(env['ENV']['GOBIN'], info['archname'] + 'l')
-    info['as'] = os.path.join(env['ENV']['GOBIN'], info['archname'] + 'a')
-    info['cc'] = os.path.join(env['ENV']['GOBIN'], info['archname'] + 'c')
-    info['pack'] = os.path.join(env['ENV']['GOBIN'], 'gopack')
+    info['gc'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + info['archname'] + 'g'
+    info['ld'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + info['archname'] + 'l'
+    info['as'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + info['archname'] + 'a'
+    info['cc'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + info['archname'] + 'c'
+    info['pack'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + 'pack'
     return info
 
 def _get_host_platform():
@@ -209,6 +209,14 @@ def _go_program_prefix(env, sources):
 def _go_program_suffix(env, sources):
     return env['PROGSUFFIX']
 
+go_builder = Builder(
+    action=Action('$GO_GCCOM', '$GO_GCCOMSTR'),
+    emitter=_gc_emitter,
+    prefix=_go_program_prefix,
+    suffix=_go_program_suffix,
+    ensure_suffix=True,
+    src_suffix='.go',
+)
 go_compiler = Builder(
     action=Action('$GO_GCCOM', '$GO_GCCOMSTR'),
     emitter=_gc_emitter,
@@ -404,7 +412,7 @@ def GoTarget(env, goos, goarch):
     env['ENV']['GOARCH'] = goarch
     #env['ENV']['GOROOT'] = 
     #env['ENV']['GOROOT'] = 
-    env['GO_GC'] = "go build" #config['gc']
+    env['GO_GC'] = 'go build' #config['gc']
     env['GO_LD'] = config['ld']
     env['GO_A'] = config['as']
     env['GO_PACK'] = config['pack']
@@ -425,7 +433,7 @@ def generate(env):
     env.Append(
         BUILDERS={
             'Go': go_compiler,
-            'GoProgram': go_linker,
+            'GoProgram': go_builder,
             'GoAssembly': go_assembler,
             'GoPack': gopack,
             'GoTest': go_tester,

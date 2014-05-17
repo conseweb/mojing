@@ -89,14 +89,20 @@ def _get_platform_info(env, goos, goarch):
     info['pack'] = os.path.join(env['ENV']['GOBIN'], 'gopack')
     return info
 
-def _get_host_platform(env):
-    newenv = env.Clone()
-    newenv['ENV'].pop('GOOS', 'darwin')
-    newenv['ENV'].pop('GOARCH', 'amd64')
-    config = _parse_config(_run_goenv(newenv))
-    print config 
+def _get_host_platform():
+    # newenv = env.Clone()
+    # newenv['ENV'].pop('GOOS', '')
+    # newenv['ENV'].pop('GOARCH', '')
+    config = _parse_config(_run_goenv())
     return config['GOOS'], config['GOARCH']
     #return 'darwin', 'amd64'
+
+def _get_go_env():
+    # newenv = env.Clone()
+    # newenv['ENV'].pop('GOOS', '')
+    # newenv['ENV'].pop('GOARCH', '')
+    config = _parse_config(_run_goenv())
+    return config
 
 # COMPILER
 
@@ -248,6 +254,26 @@ def _get_gobin():
         else:
             return None
 
+def _get_goroot():
+    try:
+        return os.environ['GOROOT']
+    except KeyError:
+        home = os.environ.get('HOME')
+        if home:
+            return os.path.join(home, 'go')
+        else:
+            return None
+
+def _get_gopath():
+    try:
+        return os.environ['GOPATH']
+    except KeyError:
+        home = os.environ.get('HOME')
+        if home:
+            return os.path.join(home, '.go')
+        else:
+            return None
+
 def _parse_config(data):
     result = {}
     for line in data.splitlines():
@@ -260,10 +286,10 @@ def _parse_config(data):
             result[name] = value
     return result
 
-def _run_goenv(env):
+def _run_goenv():
     proc = subprocess.Popen(
         ['go', 'env'],
-        cwd=os.path.join(env['ENV']['GOROOT'], 'src'),
+        #cwd=os.path.join(env['ENV']['GOROOT'], 'src'),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -393,7 +419,7 @@ def generate(env):
     env['ENV'].setdefault('GOBIN', os.path.join(env['ENV']['GOROOT'], 'bin'))
     # Set up tools
     env.AddMethod(GoTarget, 'GoTarget')
-    goos, goarch = _get_host_platform(env)
+    goos, goarch = _get_host_platform()
     env.GoTarget(goos, goarch)
     # Add builders and scanners
     env.Append(

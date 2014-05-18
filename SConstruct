@@ -31,10 +31,11 @@
 # env.Append(LINKFLAGS = ['-Wl,--rpath,/usr/local/lib/'])
 
 import sys
+import os
 
 # SConstruct
-env = Environment(TOOLS=['default', 'go'])
-env.Append(GO_LIBPATH = [''])
+env = Environment(TOOLS=['default', 'go'], ENV = {'PATH' : os.environ['PATH']+':/home/ubuntu/go/bin'})
+#env.Append(GO_LIBPATH = [''])
 
 srclist = ['src/main.go']
 

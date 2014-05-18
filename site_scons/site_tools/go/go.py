@@ -89,19 +89,19 @@ def _get_platform_info(env, goos, goarch):
     info['pack'] = os.path.join(env['ENV']['GOBIN'], 'go tool ') + 'pack'
     return info
 
-def _get_host_platform():
-    # newenv = env.Clone()
-    # newenv['ENV'].pop('GOOS', '')
-    # newenv['ENV'].pop('GOARCH', '')
-    config = _parse_config(_run_goenv())
+def _get_host_platform(env):
+    newenv = env.Clone()
+    newenv['ENV'].pop('GOOS', '')
+    newenv['ENV'].pop('GOARCH', '')
+    config = _parse_config(_run_goenv(newenv))
     return config['GOOS'], config['GOARCH']
     #return 'darwin', 'amd64'
 
-def _get_go_env():
-    # newenv = env.Clone()
-    # newenv['ENV'].pop('GOOS', '')
-    # newenv['ENV'].pop('GOARCH', '')
-    config = _parse_config(_run_goenv())
+def _get_go_env(env):
+    newenv = env.Clone()
+    newenv['ENV'].pop('GOOS', '')
+    newenv['ENV'].pop('GOARCH', '')
+    config = _parse_config(_run_goenv(newenv))
     return config
 
 # COMPILER
@@ -294,10 +294,10 @@ def _parse_config(data):
             result[name] = value
     return result
 
-def _run_goenv():
+def _run_goenv(env):
     proc = subprocess.Popen(
         ['go', 'env'],
-        #cwd=os.path.join(env['ENV']['GOROOT'], 'src'),
+        cwd=os.path.join(env['ENV']['GOROOT'], 'src'),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -427,7 +427,7 @@ def generate(env):
     env['ENV'].setdefault('GOBIN', os.path.join(env['ENV']['GOROOT'], 'bin'))
     # Set up tools
     env.AddMethod(GoTarget, 'GoTarget')
-    goos, goarch = _get_host_platform()
+    goos, goarch = _get_host_platform(env)
     env.GoTarget(goos, goarch)
     # Add builders and scanners
     env.Append(

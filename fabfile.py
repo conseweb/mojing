@@ -109,7 +109,8 @@ def stop():
 def build():
     with shell_env(GOROOT="/home/ubuntu/go", GOPATH="/home/ubuntu/.go"):
         with cd(remote_working_dir):
-            run('/home/ubuntu/go/bin/go build -o bin/mojing src/main.go', shell=False)
+            #run('/home/ubuntu/go/bin/go build -o bin/mojing src/main.go', shell=False)
+            run('/usr/bin/scons ', shell=True)
 
 
 

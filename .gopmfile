@@ -1,0 +1,6 @@
+[target]
+path=mojing
+
+[deps]
+github.com/go-martini/martini=branch:master
+github.com/martini-contrib/render=

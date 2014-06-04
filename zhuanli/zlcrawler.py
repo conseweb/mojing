@@ -22,6 +22,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException
 # from scrapemark import scrape
 import pymongo
 
@@ -48,7 +49,7 @@ def injectJQuery(browser):
         browser.execute_script(jquery)  #active the jquery lib
 
 def getField(lines, no):
-    # print lines[no]
+    print lines[no]
     return lines[no].split(u'：')[1].strip()
 
 
@@ -182,7 +183,7 @@ db.zhuanli.create_index('zlh', 1, kwargs={'unique':True, 'dropDups':True})
 # db.zhuanli.ensureIndex( { zlh: 1 }, { unique: true }, { dropDups: true })
 
 
-def main(keyword=u"人脸识别"):
+def main(keyword=u"人脸识别", skippage=0):
     # display = Display(visible=0, size=(800,600))
     # display.start()
     init()
@@ -209,8 +210,21 @@ def main(keyword=u"人脸识别"):
     # lnk = browser.find_element_by_partial_link_text(u"中国发明专利")
     # clickAndWait(lnk)
 
-    curPageNo = 1
+    oldtab = browser.current_window_handle
+
+    curPageNo = 1 
+    skipped = False
     while True:
+        browser.switch_to_window(oldtab)
+        if not skipped and skippage > 0:
+            lnkGobtn = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#pagination_top a.goBtn')))
+            inputGo = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#gopagePagination')))
+            inputGo.send_keys(str(skippage))
+            # lnkNext = browser.find_element_by_css_selector("#pagination_top a.next")
+            clickAndWait(lnkGobtn)
+            curPageNo = skippage
+            skipped = True
+
         print("Current Page NO: %d" % curPageNo)
         # fetch page content and parse it
         # html = browser.page_source
@@ -221,37 +235,54 @@ def main(keyword=u"人脸识别"):
         #     k = x.text.split()
         #     print(string.join(k[:3], ','))
 
-        oldtab = browser.current_window_handle
-
         for x in range(0, len(items)):
-            vt = items[x].text.split()
+            browser.switch_to_window(oldtab)
+            try:
+                vt = items[x].text.split()
+            except StaleElementReferenceException:
+                vt = browser.execute_script('return jQuery("div.g_item div.g_tit")[%d].textContent' % x)
+                # print x
+                # continue
             zs = {"bt": vt[0], "lx": getLeixing(vt[1]), "zt": getZhuangtai(vt[2])}
             # print zs
             browser.execute_script("viewDetail(%d)" % x)
             # print browser.title
             # newtab = browser.current_window_handle
             browser.switch_to_window(browser.window_handles[-1])
+            injectJQuery(browser)
             # ht = browser.execute_script('return $("div#nct1.n_cont1 div.nc_right").html()')
 
+            content = ''
+            lines = []
             try:
                 if zs['lx'] == 2: # u'外观设计':
-                    elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.info_con div.x_warp1 div.x_table table')))
+                    # print "------ Enter waiguangsheji ---------------"
+                    # elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.info_con div.x_warp1 div.x_table table')))
+                    content = browser.execute_script('return $("div.info_con div.x_warp1 div.x_table table").text()')
+                    # content = elem.text
+                    lines = content.split("\n")
+                    # need to process it, remove empty lines
+                    nls=filter(lambda x: len(x.strip())>0, lines) 
+
+                    if len(nls) > 0:
+                        lines = nls
                 else:
                     elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div#nct1.n_cont1 div.nc_right')))
-                # elem = browser.find_element_by_css_selector('div#nct1.n_cont1 div.nc_right')
-                content = elem.text
-
-                elem2 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.info_con div#nct1.n_cont1 div.nc_left')))
-                xt = elem2.text
+                    content = elem.text
+                    # elem = browser.find_element_by_css_selector('div#nct1.n_cont1 div.nc_right')
+                    elem2 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.info_con div#nct1.n_cont1 div.nc_left')))
+                    xt = elem2.text
+                    xl = xt.split()
+                    # 摘要
+                    zs['zhaiyao'] = xl[3].strip()
+                    # 主权项
+                    zs['zhuquanxiang'] = xl[5].strip()
+                    lines = content.split('\n')
             except TimeoutException:
                 # waiguansheji 
+                # print "--------- TimeoutException -----------"
                 continue
-
-            # print "-----------------------------"
-            # print content
-            # print "*****************************"
             
-            lines = content.split('\n')
             # 申请(专利)号
             zs['zlh'] = getField(lines, 0)
             # 申请日
@@ -275,12 +306,6 @@ def main(keyword=u"人脸识别"):
             zs['tags'] = []
             zs['tags'].append(keyword)
 
-            xl = xt.split()
-            # 摘要
-            zs['zhaiyao'] = xl[3].strip()
-            # 主权项
-            zs['zhuquanxiang'] = xl[5].strip()
-
             insertOrUpdateZl(zl, zs)
             # zl.insert(zs)
 
@@ -292,11 +317,12 @@ def main(keyword=u"人脸识别"):
             browser.switch_to_window(oldtab)
 
         try:
-            lnkNext = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#pagination_top a.next')))
-            # lnkNext = browser.find_element_by_css_selector("#pagination_top a.next")
+            # lnkNext = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '#pagination_top a.next')))
+            lnkNext = browser.find_element_by_css_selector("#pagination_top a.next")
             clickAndWait(lnkNext)
             curPageNo += 1
         except NoSuchElementException:
+            browser.close()
             break
 
     print("Current Page NO: %d" % curPageNo)
@@ -308,7 +334,7 @@ if __name__ == '__main__':
         print "Need one argument."
         sys.exit()
     kw = unicode(sys.argv[1], 'utf8')
-    main(kw)
+    main(kw, 150)
     # getZlwj("CN201120292255.1")
 
 

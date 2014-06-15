@@ -30,6 +30,7 @@ import time
 import string
 import urllib
 import zipfile
+import datetime
 import os, sys
 
 def init():
@@ -49,7 +50,7 @@ def injectJQuery(browser):
         browser.execute_script(jquery)  #active the jquery lib
 
 def getField(lines, no):
-    print lines[no]
+    # print lines[no]
     return lines[no].split(u'：')[1].strip()
 
 
@@ -114,6 +115,11 @@ def getZhuangtai(zt):
         return ztmap[zt]
 
 
+def getDate(ds):
+    dl = ds.split('.')
+    return datetime.datetime(int(dl[0]), int(dl[1]), int(dl[2]))
+
+
 def getZlwj(zlh):
     browser = webdriver.Firefox() # Get local session of firefox
     try:
@@ -147,14 +153,33 @@ def getZlwj(zlh):
 
 
 def updateZlTags(zl, oldzl, tags):
-    zlh = oldzl['zlh']
-    ts = oldzl['tags']
-    for x in tags:
-        if x not in ts:
-            ts.append(x)
-    if len(ts) > 0:
-        zl.update({'zlh': zlh}, {'$set': {'tags': ts}})
+    zlh = oldzl['_id']
+    # ts = oldzl['tags']
+    # for x in tags:
+    #     if x not in ts:
+    #         ts.append(x)
+    # if len(ts) > 0:
+    #     zl.update({'_id': zlh}, {'$set': {'tags': ts}})
+    zl.update({"_id", zlh}, {"$addToSet": 
+        {"tags": {"$each": tags}}})
     return 
+
+
+def updateZlDate(db):
+    it = db.zhuanli.find().skip(0).limit(2000)
+    for x in range(0, it.count()-1):
+        a = it.next()
+        # replace _id with zlh and del zlh field
+        oid = a['_id']
+        zlh = a['zlh']
+        a['_id'] = zlh
+        del a['zlh']
+        # replace date field
+        a['gkr'] = getDate(a['gkr'])
+        a['sqr'] = getDate(a['sqr'])
+        db.zhuanli.remove({'_id': oid})
+        db.zhuanli.insert(a)
+    return it.count()
 
 
 def updateZl(zl, zs):
@@ -164,7 +189,7 @@ def updateZl(zl, zs):
 # just and only update tags or zt field 
 def insertOrUpdateZl(zl, zs):
     # find 
-    it = zl.find({'zlh': zs['zlh']})
+    it = zl.find({'_id': zs['_id']})
     if it.count() > 0:
         # update it 
         oldzl = it.next()
@@ -172,6 +197,13 @@ def insertOrUpdateZl(zl, zs):
             updateZlTags(zl, oldzl, zs['tags'])
     else:
         zl.insert(zs)
+
+
+def zlExists(zl, zlh):
+    it = zl.find({'_id', zlh})
+    if it.count() > 0:
+        return True
+    return False
 
 
 ###########################################################
@@ -237,12 +269,7 @@ def main(keyword=u"人脸识别", skippage=0):
 
         for x in range(0, len(items)):
             browser.switch_to_window(oldtab)
-            try:
-                vt = items[x].text.split()
-            except StaleElementReferenceException:
-                vt = browser.execute_script('return jQuery("div.g_item div.g_tit")[%d].textContent' % x)
-                # print x
-                # continue
+            vt = items[x].text.split()
             zs = {"bt": vt[0], "lx": getLeixing(vt[1]), "zt": getZhuangtai(vt[2])}
             # print zs
             browser.execute_script("viewDetail(%d)" % x)
@@ -284,13 +311,13 @@ def main(keyword=u"人脸识别", skippage=0):
                 continue
             
             # 申请(专利)号
-            zs['zlh'] = getField(lines, 0)
+            zs['_id'] = getField(lines, 0)
             # 申请日
-            zs['sqr'] = getField(lines, 1)
+            zs['sqr'] = getDate(getField(lines, 1))
             # 授权公告号
             zs['gbh'] = getField(lines, 2)
             # 授权公告日
-            zs['gkr'] = getField(lines, 3)
+            zs['gkr'] = getDate(getField(lines, 3))
             # 主分类号
             zs['zflh'] = getField(lines, 4)
             # 分类号
@@ -326,6 +353,7 @@ def main(keyword=u"人脸识别", skippage=0):
             break
 
     print("Current Page NO: %d" % curPageNo)
+    return
 
 
 
@@ -334,8 +362,11 @@ if __name__ == '__main__':
         print "Need one argument."
         sys.exit()
     kw = unicode(sys.argv[1], 'utf8')
-    main(kw, 150)
-    # getZlwj("CN201120292255.1")
+    skipno = 0
+    if len(sys.argv) >= 3:
+        skipno = int(sys.argv[2])
+    main(kw, skipno)
+    # getZlwj("CN201120292255.1")  {"tags": ["人脸识别"]}
 
 
 

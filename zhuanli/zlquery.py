@@ -1,5 +1,13 @@
 # coding: utf8
 
+'''
+{"tags": {"$and": {"$in": ["虹膜识别"]} , {"$in": ["指纹识别"]}}}
+{"tags": {"$in": ["虹膜识别", "指纹识别"]}}
+
+
+
+'''
+
 import re
 import pymongo
 
@@ -10,7 +18,7 @@ import zipfile
 import os, sys
 
 connection = pymongo.Connection('localhost',27017)
-db = connection.zhuanliku
+db = connection.zhuanliku3
 zl = db.zhuanli
 # db.zhuanli.create_index('zlh', 1, kwargs={'unique':True, 'dropDups':True})
 # db.zhuanli.ensureIndex( { zlh: 1 }, { unique: true }, { dropDups: true })
@@ -28,22 +36,22 @@ def getLeixing(lx):
         return lxmap[lx]
 
 
-def getCountByQlrKw(kw, lx=u'发明专利'):
+def getCountByQlrKw(kw, lx=0):
     pat = re.compile(u".*%s.*" % kw)
-    it = db.zhuanli.find({'qlr': pat, 'lx': lx, 'zt': {'$nin': [u'无效']}})
+    it = db.zhuanli.find({'qlr': pat, 'lx': lx, 'zt': {'$nin': [1]}})
     return it.count()
 
 
 def getFmCountByQlrKw(kw):
     pat = re.compile(u".*%s.*" % kw)
     # it = db.zhuanli.find({'qlr': pat, 'lx': u'发明专利', 'zt': {'$nin': [u'无效', u'在审']}})
-    it = db.zhuanli.find({'qlr': pat, 'lx': u'发明专利', 'zt': u'有效'})
+    it = db.zhuanli.find({'qlr': pat, 'lx': 0, 'zt': 0})
     return it.count()
 
 
-def getQlrStats():
+def getQlrStats(tag):
     xm = {}
-    xl = getAllQlr()
+    xl = getAllQlr(tag)
     for x in xl:
         cnt = getFmCountByQlrKw(x)
         if cnt > 0:
@@ -51,9 +59,9 @@ def getQlrStats():
     sortDictByValues(xm)
 
 
-def getAllQlr():
+def getAllQlr(tag):
     ql = []
-    it = db.zhuanli.find().skip(0).limit(3000)
+    it = db.zhuanli.find({"tags": {"$in": [tag]}}).skip(0).limit(5000)
     for x in it:
         qlr = x['qlr']
         if qlr not in ql:
@@ -61,16 +69,26 @@ def getAllQlr():
     return ql
 
 
+# def getAllQlr():
+#     ql = []
+#     it = db.zhuanli.find().skip(0).limit(5000)
+#     for x in it:
+#         qlr = x['qlr']
+#         if qlr not in ql:
+#             ql.append(qlr)
+#     return ql
+
+
 def sortDictByValues(mydict):
     for key, value in sorted(mydict.iteritems(), key=lambda (k,v): (v,k), reverse=True):
-        print(u"%s, %s" % (key, value)) 
+        print("%s, %s" % (key.encode('utf8'), value)) 
 
 
 if __name__ == '__main__':
-    # if len(sys.argv) < 2:
-    #     print "Need one argument."
-    #     sys.exit()
-    # kw = unicode(sys.argv[1], 'utf8')
+    if len(sys.argv) < 2:
+        print "Need one argument."
+        sys.exit()
+    kw = unicode(sys.argv[1], 'utf8')
     # lc = len(sys.argv)
     # cnt = 0
     # if lc == 2:
@@ -80,5 +98,5 @@ if __name__ == '__main__':
     #   lx = unicode(sys.argv[2], 'utf8')
     #   cnt = getCountByQlrKw(kw, lx)
     # print cnt
-    getQlrStats()
+    getQlrStats(kw)
 

@@ -88,7 +88,8 @@ def deploy():
         run("touch app.wsgi")
 
 def deploy_proj(loc):
-    rsync_project(local_dir=loc, remote_dir=remote_working_dir, exclude=['.git','bin','data','logs'])
+    rsync_project(local_dir=loc, remote_dir=remote_working_dir, 
+        exclude=['.git','bin','data','logs','zhuanli', '.vendor', '.vagrant', 'tmp'])
     stop()
     build()
     start()

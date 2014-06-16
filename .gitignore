@@ -11,4 +11,8 @@ doc/_build
 doc/_static
 doc/_templates
 *.pem
+zhuanli
+.vagrant
+.vendor
+*.log
 

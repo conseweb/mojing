@@ -16,36 +16,43 @@ package main
 
 import (
 	"bitbucket.org/qiyi/godom"
+	"bytes"
 	"crypto/sha1"
-	"encoding/xml"
+	"encoding/json"
 	"fmt"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/render"
 	"io"
 	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
 	// md5("mojing")
-	TOKEN     = "2cfb8f0539915d7df8c9139c5564cf83"
-	APPID     = "wx5b0dcca6246fad3e"
-	APPSECRET = "5d9afef1608641a63137e7094e2b8a36"
-	Text      = "text"
-	Location  = "location"
-	Image     = "image"
-	Link      = "link"
-	Event     = "event"
-	Music     = "music"
-	News      = "news"
+	TOKEN       = "2cfb8f0539915d7df8c9139c5564cf83"
+	APPID       = "wx5c913a59135446c1"
+	APPSECRET   = "c2a3b1b715daba03bb899c1851c749cd"
+	TEST_APPID  = "wx91f60e2b363a36df"
+	TEST_SECRET = "f20b0df0280e6b0817772f5ea618f3c5"
+	Text        = "text"
+	Location    = "location"
+	Image       = "image"
+	Link        = "link"
+	Event       = "event"
+	Music       = "music"
+	News        = "news"
 
 	getTokenUrl = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=APPID&secret=APPSECRET"
 )
+
+var ACCESS_TOKEN string = ""
 
 type msgBase struct {
 	ToUserName   string
@@ -54,38 +61,67 @@ type msgBase struct {
 	MsgType      string
 }
 
-type Request struct {
-	XMLName                xml.Name `xml:"xml"`
-	msgBase                         // base struct
-	Location_X, Location_Y float32
-	Scale                  int
-	Label                  string
-	PicUrl                 string
-	MsgId                  int
-}
+var MENU string = `{
+	"button":[
+	{
+	       "name":"魔镜",
+	       "sub_button":[
+	        {
+	           "type":"click",
+	           "name":"介绍",
+	           "key":"m1_jieshao"
+	        },
+	        {
+	           "type":"click",
+	           "name":"计划",
+	           "key":"m1_jihua"
+	        },
+	        {
+	           "type":"click",
+	           "name":"合作",
+	           "key":"m1_hezuo"
+	        },
+	        {
+	           "type":"click",
+	           "name":"联系",
+	           "key":"m1_lianxi"
+	        }]
+	  },
+	  {
+	       "name":"案例",
+	       "sub_button":[
+	        {
+	           "type":"view",
+	           "name":"Restaurant Picker",
+	           "key":"m2_restaurant",
+	           "url":"http://jindou.io/demos/restaurant_picker"
+	        },
+	        {
+	           "type":"view",
+	           "name":"租车",
+	           "key":"m2_zuche",
+	           "url":"http://m.zuche.com/html5/newversion/index.html"
+	        }]
+	  },
+	  {
+	       "name":"招聘",
+	       "sub_button":[
+	        {
+	           "type":"click",
+	           "name":"职位",
+	           "key":"m3_zhiwei"
+	        }]
+	  }]
+	}
+`
 
-type Response struct {
-	XMLName xml.Name `xml:"xml"`
-	msgBase
-	ArticleCount int     `xml:",omitempty"`
-	Articles     []*item `xml:"Articles>item,omitempty"`
-	FuncFlag     int
-}
+func LoadMenu(filename string) string {
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		//Do something
+	}
 
-type item struct {
-	XMLName     xml.Name `xml:"item"`
-	Title       string
-	Description string
-	PicUrl      string
-	Url         string
-}
-
-type MsgHeader struct {
-	To      string `xml: "ToUserName"`
-	From    string `xml: "FromUserName"`
-	Time    int    `xml: "CreateTime"`
-	MsgType string `xml: "MsgType"`
-	Id      string `xml: "MsgId"`
+	return string(content)
 }
 
 /*
@@ -97,13 +133,7 @@ type MsgHeader struct {
  <Content><![CDATA[this is a test]]></Content>
  <MsgId>1234567890123456</MsgId>
 </xml>
-*/
-type TextMessage struct {
-	MsgHeader
-	Content string `xml: "Content"`
-}
 
-/*
 Image:
 <xml>
  <ToUserName><![CDATA[toUser]]></ToUserName>
@@ -114,30 +144,18 @@ Image:
  <MediaId><![CDATA[media_id]]></MediaId>
  <MsgId>1234567890123456</MsgId>
 </xml>
-*/
-type ImageMessage struct {
-	MsgHeader
-	Url     string `xml: "PicUrl"`
-	MediaId string `xml: "MediaId"`
-}
 
-/*
 Voice:
 <xml>
-	<ToUserName><![CDATA[toUser]]></ToUserName>
-	<FromUserName><![CDATA[fromUser]]></FromUserName>
-	<CreateTime>1357290913</CreateTime>
-	<MsgType><![CDATA[voice]]></MsgType>
-	<MediaId><![CDATA[media_id]]></MediaId>
-	<Format><![CDATA[Format]]></Format>
-	<MsgId>1234567890123456</MsgId>
+    <ToUserName><![CDATA[toUser]]></ToUserName>
+    <FromUserName><![CDATA[fromUser]]></FromUserName>
+    <CreateTime>1357290913</CreateTime>
+    <MsgType><![CDATA[voice]]></MsgType>
+    <MediaId><![CDATA[media_id]]></MediaId>
+    <Format><![CDATA[Format]]></Format>
+    <MsgId>1234567890123456</MsgId>
 </xml>
 */
-type VoiceMessage struct {
-	MsgHeader
-	MediaId string `xml: "MediaId"`
-	Format  string `xml: "Format"`
-}
 
 // 对字符串进行SHA1哈希
 func sha1hash(data string) string {
@@ -151,12 +169,6 @@ func checkSignature(req *http.Request) bool {
 	// http://localhost:3000/wx/?signature=8b90bc413e1090141e1e1755c7febbe849236582&timestamp=3436&nonce=23435&echostr=testok
 	// get 3 params
 	req.ParseForm()
-	// if len(req.Form) > 0 {
-	// 	for k, v := range req.Form {
-	// 		x := fmt.Sprintf("%s, %s", k, v[0])
-	// 		fmt.Println(x)
-	// 	}
-	// }
 	sig := req.Form.Get("signature")
 	ts := req.Form.Get("timestamp")
 	nonce := req.Form.Get("nonce")
@@ -177,28 +189,6 @@ func checkSignature(req *http.Request) bool {
 	}
 }
 
-func parseMsgBase(data string) (base *msgBase, doc dom.Document) {
-	d, err := dom.ParseString(data)
-	if err != nil {
-		fmt.Println("Parse xml string failed.", err)
-		return nil, nil
-	}
-
-	base = new(msgBase)
-	base.ToUserName = d.GetElementsByTagName("ToUserName").Item(0).FirstChild().NodeValue()
-	base.FromUserName = d.GetElementsByTagName("FromUserName").Item(0).FirstChild().NodeValue()
-	seconds, _ := strconv.Atoi(d.GetElementsByTagName("CreateTime").Item(0).FirstChild().NodeValue())
-	base.CreateTime = time.Duration(seconds) * time.Second
-	base.MsgType = d.GetElementsByTagName("MsgType").Item(0).FirstChild().NodeValue()
-	return base, d
-
-	// fmt.Println(d.GetElementsByTagName("ToUserName").Item(0).NodeName())
-	// fmt.Println(d.GetElementsByTagName("ToUserName").Item(0).FirstChild().NodeValue())
-	// fmt.Println(d.GetElementsByTagName("FromUserName").Item(0).FirstChild().NodeValue())
-	// fmt.Println(d.GetElementsByTagName("CreateTime").Item(0).FirstChild().NodeValue())
-	// fmt.Println(root.ChildNodes().Item(2).NodeValue())
-}
-
 func main() {
 	logfile, err := os.OpenFile("test.log", os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
@@ -211,7 +201,7 @@ func main() {
 
 	m := martini.Classic()
 	// m.Get("/", func() string {
-	// 	return "Hello world!"
+	//  return "Hello world!"
 	// })
 
 	// render html templates from templates directory
@@ -228,6 +218,22 @@ func main() {
 		r.JSON(200, map[string]interface{}{"hello": "world"})
 	})
 
+	m.Get("/wx/menu/create", func(req *http.Request) string {
+		// if checkSignature(req) == false {
+		// 	return "not wechat message"
+		// }
+		_, msg := CreateMenu(MENU)
+		return msg + MENU
+	})
+
+	m.Get("/wx/menu/get", func(req *http.Request) string {
+		// if checkSignature(req) == false {
+		// 	return "not wechat message"
+		// }
+		_, msg := GetMenu()
+		return msg
+	})
+
 	m.Get("/wx/**", func(req *http.Request) string {
 		if checkSignature(req) == false {
 			return "not wechat message"
@@ -238,7 +244,7 @@ func main() {
 
 	m.Post("/wx/**", func(req *http.Request) string {
 		// if checkSignature(req) == false {
-		// 	return "not wechat message"
+		//  return "not wechat message"
 		// }
 		defer req.Body.Close()
 
@@ -254,17 +260,43 @@ func main() {
 			if base.MsgType == Text {
 				content := doc.GetElementsByTagName("Content").Item(0).FirstChild().NodeValue()
 				fmt.Println(content)
-				resptxt := "Hello, i received a text from " + base.FromUserName
+				resptxt := "Hello, i received a text "
 				resp := EncodeTextRespMsg(base.FromUserName, base.ToUserName, resptxt)
 				d, _ := dom.ParseString(resp)
 				xml := dom.ToXml(d)
 				return xml
 			} else if base.MsgType == Image {
-				resptxt := "Hello, i received a image from " + base.FromUserName
+				picUrl := getStrValueByFieldName(doc, "PicUrl")
+				mediaId := getStrValueByFieldName(doc, "MediaId")
+
+				getMediaFile(mediaId)
+
+				resptxt := "Hello, i received a image " + picUrl
 				resp := EncodeTextRespMsg(base.FromUserName, base.ToUserName, resptxt)
 				d, _ := dom.ParseString(resp)
 				xml := dom.ToXml(d)
 				return xml
+			} else if base.MsgType == Event {
+				event := getStrValueByFieldName(doc, "Event")
+				if event == "subscribe" {
+					resptxt := "欢迎订阅魔镜订阅号"
+					resp := EncodeTextRespMsg(base.FromUserName, base.ToUserName, resptxt)
+					d, _ := dom.ParseString(resp)
+					xml := dom.ToXml(d)
+					return xml
+				} else if event == "unsubscribe" {
+					log.Println(base.FromUserName + " unsubscribed!")
+				} else if event == "CLICK" {
+					eventkey := getStrValueByFieldName(doc, "EventKey")
+					if eventkey == "m1_jieshao" {
+						// resptxt := ""
+					}
+					resptxt := fmt.Sprintf("Menu click event: %s", eventkey)
+					resp := EncodeTextRespMsg(base.FromUserName, base.ToUserName, resptxt)
+					d, _ := dom.ParseString(resp)
+					xml := dom.ToXml(d)
+					return xml
+				}
 			}
 
 		}
@@ -289,23 +321,181 @@ func EncodeTextRespMsg(to string, from string, content string) string {
 	return result
 }
 
-// func DecodeRequest(data []byte) (req *Request, err error) {
-// 	req = &Request{}
-// 	if err = xml.Unmarshal(data, req); err != nil {
-// 		return
-// 	}
-// 	req.CreateTime *= time.Second
-// 	return
-// }
+func getStrValueByFieldName(doc dom.Document, fn string) string {
+	return doc.GetElementsByTagName(fn).Item(0).FirstChild().NodeValue()
+}
 
-// func NewResponse() (resp *Response) {
-// 	resp = &Response{}
-// 	resp.CreateTime = time.Duration(time.Now().Unix())
-// 	return
-// }
+func getIntValueByFieldName(doc dom.Document, fn string) int {
+	val := doc.GetElementsByTagName(fn).Item(0).FirstChild().NodeValue()
+	ival, _ := strconv.Atoi(val)
+	return ival
+}
 
-// func (resp Response) Encode() (data []byte, err error) {
-// 	resp.CreateTime = time.Duration(time.Now().Unix())
-// 	data, err = xml.Marshal(resp)
-// 	return
-// }
+func parseMsgBase(data string) (base *msgBase, doc dom.Document) {
+	d, err := dom.ParseString(data)
+	if err != nil {
+		fmt.Println("Parse xml string failed.", err)
+		return nil, nil
+	}
+
+	base = new(msgBase)
+	base.ToUserName = getStrValueByFieldName(d, "ToUserName")
+	base.FromUserName = getStrValueByFieldName(d, "FromUserName")
+	seconds := getIntValueByFieldName(d, "CreateTime")
+	base.CreateTime = time.Duration(seconds) * time.Second
+	base.MsgType = d.GetElementsByTagName("MsgType").Item(0).FirstChild().NodeValue()
+	return base, d
+}
+
+func GetAccessToken() string {
+	url := "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s"
+	x := fmt.Sprintf(url, APPID, APPSECRET)
+	// http get
+	res, err := http.Get(x)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err2 := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatal(err2)
+	}
+
+	type Message struct {
+		Access_token string
+		Expires_in   int
+	}
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+
+	var m Message
+	if err := dec.Decode(&m); err != nil {
+		log.Fatal(err)
+	}
+
+	return m.Access_token
+}
+
+// ftype: image, voice, video, thumb
+func postFile(filename string, ftype string) error {
+	tUrlTemp := "http://file.api.weixin.qq.com/cgi-bin/media/upload?access_token=%s&type=%s"
+	targetUrl := fmt.Sprintf(tUrlTemp, ACCESS_TOKEN, ftype)
+	bodyBuf := &bytes.Buffer{}
+	bodyWriter := multipart.NewWriter(bodyBuf)
+
+	// 关键的一步操作
+	fileWriter, err := bodyWriter.CreateFormFile("uploadfile", filename)
+	if err != nil {
+		fmt.Println("error writing to buffer")
+		return err
+	}
+
+	//打开文件句柄操作
+	fh, err := os.Open(filename)
+	if err != nil {
+		fmt.Println("error opening file")
+		return err
+	}
+	defer fh.Close()
+
+	//iocopy
+	_, err = io.Copy(fileWriter, fh)
+	if err != nil {
+		return err
+	}
+
+	contentType := bodyWriter.FormDataContentType()
+	bodyWriter.Close()
+
+	resp, err := http.Post(targetUrl, contentType, bodyBuf)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	resp_body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Println(resp.Status)
+	fmt.Println(string(resp_body))
+	return nil
+}
+
+func getMediaFile(mid string) {
+	tUrlTemp := "http://file.api.weixin.qq.com/cgi-bin/media/get?access_token=%s&media_id=%s"
+	targetUrl := fmt.Sprintf(tUrlTemp, ACCESS_TOKEN, mid)
+
+	// http get
+	res, err := http.Get(targetUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err2 := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatal(err2)
+	}
+
+	fn := "/home/ubuntu/public/images/" + mid + ".jpg"
+	// save to file
+	f, _ := os.Create(fn)
+	defer f.Close()
+	f.Write(data)
+}
+
+func CreateMenu(menu string) (int, string) {
+	access_token := GetAccessToken()
+	url := "https://api.weixin.qq.com/cgi-bin/menu/create?access_token=%s"
+
+	x := fmt.Sprintf(url, access_token)
+	res, err := http.Post(x, "application/json", strings.NewReader(menu))
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err2 := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatal(err2)
+	}
+
+	type Message struct {
+		Errcode int
+		Errmsg  string
+	}
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+
+	var m Message
+	if err := dec.Decode(&m); err != nil {
+		log.Fatal(err)
+	}
+
+	return m.Errcode, m.Errmsg
+}
+
+func GetMenu() (int, string) {
+	access_token := GetAccessToken()
+	url := "https://api.weixin.qq.com/cgi-bin/menu/get?access_token=%s"
+
+	x := fmt.Sprintf(url, access_token)
+	res, err := http.Get(x)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err2 := ioutil.ReadAll(res.Body)
+	defer res.Body.Close()
+	if err != nil {
+		log.Fatal(err2)
+	}
+
+	type Message struct {
+		Errcode int
+		Errmsg  string
+	}
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+
+	var m Message
+	if err := dec.Decode(&m); err != nil {
+		log.Fatal(err)
+	}
+
+	return m.Errcode, m.Errmsg
+}

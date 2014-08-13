@@ -213,6 +213,14 @@ func main() {
 		r.HTML(200, "hello", "魔镜")
 	})
 
+	m.Get("/ip", func(req *http.Request) string {
+		// if checkSignature(req) == false {
+		// 	return "not wechat message"
+		// }
+		ip, _, _ := net.SplitHostPort(req.RemoteAddr)
+		r.JSON(200, map[string]interface{}{"ip": ip})
+	})
+
 	// This will set the Content-Type header to "application/json; charset=UTF-8"
 	m.Get("/api", func(r render.Render) {
 		r.JSON(200, map[string]interface{}{"hello": "world"})

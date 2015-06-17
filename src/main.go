@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"log"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -213,12 +214,13 @@ func main() {
 		r.HTML(200, "hello", "魔镜")
 	})
 
-	m.Get("/ip", func(req *http.Request) string {
+	m.Get("/ip", func(r render.Render, req *http.Request) {
 		// if checkSignature(req) == false {
 		// 	return "not wechat message"
 		// }
 		ip, _, _ := net.SplitHostPort(req.RemoteAddr)
-		r.JSON(200, map[string]interface{}{"ip": ip})
+		proxy, _, _ := net.SplitHostPort(req.Header.Get("X-FORWARDED-FOR"))
+		r.JSON(200, map[string]interface{}{"ip": ip, "proxy": proxy})
 	})
 
 	// This will set the Content-Type header to "application/json; charset=UTF-8"
